@@ -13,41 +13,41 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
-public class BookStore {
-    static String url = "jdbc:postgresql://localhost:5432/bookstore";
-    static String userid = "postgres";
-    static String password = "Modular1/1!";
-    static JList<Book> booksList;
-    static JList<Book> cartList;
-    static Vector<Book> cart;
-    static JFrame frame;
-    static JLabel titleValue, ISBNValue, priceValue, stockValue, authorValue, genreValue, publisherValue, pagesValue, usernameValue;
-    static String usernameLoggedIn;
+public class customerBookstore {
+    private static final String url = "jdbc:postgresql://localhost:5432/bookstore";
+    private static final String userid = "postgres";
+    private static final String password = "Modular1/1!";
 
-    boolean isOwner;
+    private JList<Book> booksList;
+    private JList<Book> cartList;
+    private Vector<Book> cart;
+    private JPanel mainPane, customerInterfacePanel, cartPanel, cartButtonsPanel;
+    private JLabel titleInfo, ISBNInfo, priceInfo, stockInfo, authorInfo, genreInfo, publisherInfo, pagesInfo, usernameInfo;
+    private String usernameLoggedIn;
 
-    public BookStore(){
-        isOwner = true;
+    public customerBookstore(){
+        cart = new Vector<>();
+        initializeView();
     }
 
     public static void main(String args[]){
-        initiateView();
+        customerBookstore customerBookstore = new customerBookstore();
     }
 
-    public static Vector<Book> getBooks(){
+    //Queries database for book collection available to customer and populates booklist
+    public Vector<Book> getBooks(){
         try{
             Connection conn = DriverManager.getConnection(url, userid, password);   
             PreparedStatement pStmt = conn.prepareStatement(
                 "SELECT title, ISBN, price, stock FROM books WHERE books.available = true;"
             );
             ResultSet rset = pStmt.executeQuery();
-            Vector<Book> bookList = new Vector<Book>();
+            Vector<Book> books = new Vector<Book>();
 
             while(rset.next()){
-                bookList.add(new Book(rset.getString("title"), rset.getString("ISBN"), rset.getDouble("price"), rset.getInt("stock")));
+                books.add(new Book(rset.getString("title"), rset.getString("ISBN"), rset.getDouble("price"), rset.getInt("stock")));
             }
-
-            return bookList;
+            return books;
         }
         catch (Exception sqlException){
             System.out.println("Exception: " + sqlException);
@@ -55,7 +55,8 @@ public class BookStore {
         return null;
     }
 
-    public static Vector<Book> searchBooks(String title, String author, String ISBN, String genre){
+    //Queries database for book collection available to customer narrowed down to parameters and populates booklist
+    public Vector<Book> searchBooks(String title, String author, String ISBN, String genre){
         try{
             Connection conn = DriverManager.getConnection(url, userid, password);   
             PreparedStatement pStmt = conn.prepareStatement(
@@ -66,13 +67,13 @@ public class BookStore {
             pStmt.setString(3, ISBN);
             pStmt.setString(4, genre);
             ResultSet rset = pStmt.executeQuery();
-            Vector<Book> bookList = new Vector<Book>();
+            Vector<Book> books = new Vector<Book>();
 
             while(rset.next()){
-                bookList.add(new Book(rset.getString("book_title"), rset.getString("book_ISBN"), rset.getDouble("book_price"), rset.getInt("book_stock")));
+                books.add(new Book(rset.getString("book_title"), rset.getString("book_ISBN"), rset.getDouble("book_price"), rset.getInt("book_stock")));
             }
 
-            return bookList;
+            return books;
         }
         catch (Exception sqlException){
             System.out.println("Exception: " + sqlException);
@@ -81,7 +82,8 @@ public class BookStore {
 
     }
 
-    public static void getBookInformation(String ISBN){
+    //Queries database for specific information about selected book's ISBN
+    public void getBookInformation(String ISBN){
         try{
             Connection conn = DriverManager.getConnection(url, userid, password);   
             PreparedStatement pStmt = conn.prepareStatement(
@@ -94,18 +96,18 @@ public class BookStore {
 
             while(rset.next()){
                 if(i <= 0){
-                    titleValue.setText(rset.getString("title"));
-                    ISBNValue.setText(rset.getString("ISBN"));
-                    priceValue.setText(Double.toString(rset.getDouble("Price")));
-                    stockValue.setText(Integer.toString(rset.getInt("Stock")));
-                    authorValue.setText(rset.getString("author_name"));
-                    genreValue.setText(rset.getString("genre_name"));
-                    publisherValue.setText(rset.getString("publisher_name"));
-                    pagesValue.setText(Integer.toString(rset.getInt("num_pages")));
+                    titleInfo.setText(rset.getString("title"));
+                    ISBNInfo.setText(rset.getString("ISBN"));
+                    priceInfo.setText(Double.toString(rset.getDouble("Price")));
+                    stockInfo.setText(Integer.toString(rset.getInt("Stock")));
+                    authorInfo.setText(rset.getString("author_name"));
+                    genreInfo.setText(rset.getString("genre_name"));
+                    publisherInfo.setText(rset.getString("publisher_name"));
+                    pagesInfo.setText(Integer.toString(rset.getInt("num_pages")));
                 }
                 else{
                     //Multiple tuples returned when more than one author - append each additional author
-                    authorValue.setText(authorValue.getText() + ", " + rset.getString("author_name"));
+                    authorInfo.setText(authorInfo.getText() + ", " + rset.getString("author_name"));
                 }
                 i++;
             }
@@ -115,7 +117,8 @@ public class BookStore {
         }
     }
 
-    public static void confirmOrder(){
+    //Shows popup to user to input shipping and billing details. Invokes sendOrder() if details are filled out
+    public void showOrderConfirmationPopUp(){
         if(cart.size() <= 0){
             return;
         }
@@ -144,9 +147,11 @@ public class BookStore {
         }
     }
 
-    public static int[] sendOrder(String userID, String billing, String shipping){
+    //Queries database to insert new order and corresponding suborders based on user's cart
+    public int[] sendOrder(String userID, String billing, String shipping){
         int[] result = {-1, -1};
         try{
+            //First we insert the order with the user details
             Connection conn = DriverManager.getConnection(url, userid, password);   
             PreparedStatement orderStmt = conn.prepareStatement(
                 "INSERT INTO orders (user_id, total, billing_address, shipping_address, order_status, date) VALUES(?, 0, ?, ?, 'Order Placed', ?) RETURNING order_id, tracking_number;"
@@ -164,6 +169,7 @@ public class BookStore {
                 tracking_number = orderRset.getInt("tracking_number");
             }
 
+            //Then for each item in the cart, we insert a suborder with the corresponding book and ordered quantities
             PreparedStatement suborderStmt;
             for(int i = 0; i < cart.size(); i++){
                 suborderStmt = conn.prepareStatement(
@@ -176,6 +182,7 @@ public class BookStore {
                 suborderStmt.execute();
             }
 
+            //Once the order and suborders have succeeded, we clear the cart and return to the user the order and tracking id
             emptyCart();
             cartList.setListData(cart);
             booksList.setListData(getBooks());    
@@ -188,21 +195,22 @@ public class BookStore {
         return result;
     }
 
-    public static void showLogInPopup(){
+    //Displays a login popup to the user so that they can enter their username and password.
+    //Note that password handling is out of scope for the project - users can simply log in by entering just their username
+    public void showLogInPopup(){
         JTextField usernameTextField = new JTextField();
         JPasswordField passwordTextField = new JPasswordField();
         final JComponent[] inputs = new JComponent[] {
-            new JLabel("Username"),
-            usernameTextField,
-            new JLabel("Password"),
-            passwordTextField
+            new JLabel("Username"), usernameTextField,
+            new JLabel("Password"), passwordTextField
         };
         int result = JOptionPane.showConfirmDialog(null, inputs, "User Login", JOptionPane.PLAIN_MESSAGE);
         if (result == JOptionPane.OK_OPTION) {
+            //Invokes user login with inputted username
             if(userLogin(usernameTextField.getText())){       
                 usernameLoggedIn = usernameTextField.getText();
                 JOptionPane.showConfirmDialog(null, new JLabel("Logged in as " + usernameLoggedIn), "Successful Login", JOptionPane.PLAIN_MESSAGE);
-                usernameValue.setText("Logged in as: " + usernameLoggedIn);
+                usernameInfo.setText("Logged in as: " + usernameLoggedIn);
                 emptyCart();
                 cartList.setListData(cart);
             }
@@ -212,7 +220,9 @@ public class BookStore {
         }
     }
 
-    public static boolean userLogin(String username){
+    //Queries database to check if a user with the given username exists, and logs that user in.
+    //Note that password handling is out of scope for the project - users can simply log in by entering just their username
+    public boolean userLogin(String username){
         try{
             Connection conn = DriverManager.getConnection(url, userid, password);   
             PreparedStatement orderStmt = conn.prepareStatement(
@@ -220,7 +230,6 @@ public class BookStore {
             );
             orderStmt.setString(1, username);
             ResultSet orderRset = orderStmt.executeQuery();
-
             return orderRset.next();
         }
         catch (Exception sqlException){
@@ -229,7 +238,9 @@ public class BookStore {
         return false;
     }
 
-    public static void showRegisterUserPopUp(){
+    //Displays a popup where details for a new user can be input for registration
+    //Invokes registerUser() with those inputs
+    public void showRegisterUserPopUp(){
         JTextField regUsernameField = new JTextField();
         JPasswordField regPasswordField = new JPasswordField();
         JTextField regFirstName = new JTextField();
@@ -248,6 +259,7 @@ public class BookStore {
         };
         int result = JOptionPane.showConfirmDialog(null, inputs, "Register New User", JOptionPane.PLAIN_MESSAGE);
         if (result == JOptionPane.OK_OPTION) {
+            //Ensure that no field is empty
             if(!regUsernameField.getText().equals(null) && !regUsernameField.getText().equals("") && !regFirstName.getText().equals(null) && !regFirstName.getText().equals("")
             && !regLastName.getText().equals(null) && !regLastName.getText().equals("")  && !regEmail.getText().equals(null) && !regEmail.getText().equals("")
             && !regBilling.getText().equals(null) && !regBilling.getText().equals("") && !regShipping.getText().equals(null) && !regShipping.getText().equals("")){
@@ -264,7 +276,9 @@ public class BookStore {
         }
     }
 
-    public static boolean registerUser(String username, String firstName, String lastName, String email, String billing, String shipping){
+    //Queries the database to insert a new user with given details for registration.
+    //When registering a user, it must be the case that the username and/or email don't already exist in the database
+    public boolean registerUser(String username, String firstName, String lastName, String email, String billing, String shipping){
         try{
             Connection conn = DriverManager.getConnection(url, userid, password);   
             PreparedStatement orderStmt = conn.prepareStatement(
@@ -285,7 +299,9 @@ public class BookStore {
         return false;
     }
 
-    public static void trackOrder(int orderNumber){
+    //Queries database to retrieve an order and its corresponing suborders based on a orderID input
+    //Displays details on that order (e.g. tracking IDs, total, what books were ordered and how many)
+    public void trackOrder(int orderNumber){
         try{
             Connection conn = DriverManager.getConnection(url, userid, password);   
             PreparedStatement trackStmt = conn.prepareStatement(
@@ -306,6 +322,7 @@ public class BookStore {
             Vector<String> orderedBooks = new Vector<>();
             orderedBooks.add(trackRset.getString("title") + ", " + trackRset.getInt("quantity"));
 
+            //Add books from multiple suborders
             while(trackRset.next()){
                 orderedBooks.add(trackRset.getString("title") + ", " + trackRset.getInt("quantity"));
             }
@@ -326,28 +343,54 @@ public class BookStore {
         }
     }
 
-    public static void emptyCart(){
+    //Reset the user's cart, removing all items from cart
+    //Invoked when logging in to new user, or when order has succeeded
+    public void emptyCart(){
         for(int i = 0; i < cart.size(); i++){
             cart.get(i).empty();
         }
         cart.clear();
     }
 
-    public static void initiateView(){
-        frame = new JFrame("Look Inna Book - Customer Interface");
+    //Initializes view components and handling of user inputs
+    public void initializeView(){
+        JFrame frame = new JFrame("Look Inna Book - Customer Interface");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(800, 600);
 
-        JPanel main = new JPanel(new GridLayout(2, 1));
-        main.setSize(800, 600);
-        frame.add(main);
+        mainPane = new JPanel(new GridLayout(2, 1));
+        mainPane.setSize(800, 600);
+        frame.add(mainPane);
 
+        initializeBookCollectionPanel();
+
+        customerInterfacePanel = new JPanel(new GridLayout(2,1));
+        mainPane.add(customerInterfacePanel);
+
+        initializeSearchBarPanel();
+        
+        cartPanel = new JPanel(new GridLayout(1, 2));
+        customerInterfacePanel.add(cartPanel);
+
+        cartButtonsPanel = new JPanel(new GridLayout(6, 1));
+        cartPanel.add(cartButtonsPanel);    
+
+        initializeUserLoginPanel();
+        initializeCartPanel();
+        initializeTrackingPanel();
+
+        frame.setVisible(true);
+    }
+
+    
+    //Handling viewable book collection and book details
+    public void initializeBookCollectionPanel(){
         JPanel bookCollectionPanel = new JPanel(new GridLayout(1, 2));
-        main.add(bookCollectionPanel);
+        mainPane.add(bookCollectionPanel);
 
-        booksList = new JList<Book>();
-        booksList.setBounds(30, 40, 200, 300);
-        booksList.setVisibleRowCount(10);
+        //Populates book collection with available books in the storefront
+        booksList = new JList<Book>(getBooks());
+        //Custom renderer so book titles are present in the list
         booksList.setCellRenderer(new DefaultListCellRenderer(){
             public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus){
                 Component renderer = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
@@ -357,8 +400,8 @@ public class BookStore {
                 return renderer;
             }
         });
-        booksList.setListData(getBooks());
 
+        //Populates book information panel with selected book
         booksList.addListSelectionListener((ListSelectionListener) new ListSelectionListener() {
             public void valueChanged(ListSelectionEvent arg) {
                 if (!arg.getValueIsAdjusting()) {
@@ -372,53 +415,48 @@ public class BookStore {
         bookCollectionPanel.add(booksList);
         bookCollectionPanel.add(new JScrollPane(booksList));
 
+
+        //Initialization of book detail labels
         JPanel bookDetails = new JPanel(new GridLayout(8,2));
         bookCollectionPanel.add(bookDetails);
      
         JLabel informationLabel = new JLabel("Book Information:");
         bookDetails.add(informationLabel, 0);
 
-        titleValue = new JLabel("");
-        bookDetails.add(titleValue, 1);
+        titleInfo = new JLabel("");
+        bookDetails.add(titleInfo, 1);
 
         bookDetails.add(new JLabel("ISBN: "), 2);
-
-        ISBNValue = new JLabel("");
-        bookDetails.add(ISBNValue, 3);
+        ISBNInfo = new JLabel("");
+        bookDetails.add(ISBNInfo, 3);
 
         bookDetails.add(new JLabel("Price: "), 4);
-
-        priceValue = new JLabel("");
-        bookDetails.add(priceValue, 5);
+        priceInfo = new JLabel("");
+        bookDetails.add(priceInfo, 5);
 
         bookDetails.add(new JLabel("Stock: "), 6);
-
-        stockValue = new JLabel("");
-        bookDetails.add(stockValue, 7);
+        stockInfo = new JLabel("");
+        bookDetails.add(stockInfo, 7);
 
         bookDetails.add(new JLabel("Author: "), 8);
-
-        authorValue = new JLabel("");
-        bookDetails.add(authorValue, 9);
+        authorInfo = new JLabel("");
+        bookDetails.add(authorInfo, 9);
 
         bookDetails.add(new JLabel("Genre: "), 10);
-
-        genreValue = new JLabel("");
-        bookDetails.add(genreValue, 11);
+        genreInfo = new JLabel("");
+        bookDetails.add(genreInfo, 11);
         
         bookDetails.add(new JLabel("Publisher: "), 12);
-
-        publisherValue = new JLabel("");
-        bookDetails.add(publisherValue, 13);
+        publisherInfo = new JLabel("");
+        bookDetails.add(publisherInfo, 13);
 
         bookDetails.add(new JLabel("Pages: "), 14);
+        pagesInfo = new JLabel("");
+        bookDetails.add(pagesInfo, 15);
+    }
 
-        pagesValue = new JLabel("");
-        bookDetails.add(pagesValue, 15);
-
-        JPanel customerInterfacePanel = new JPanel(new GridLayout(2,1));
-        main.add(customerInterfacePanel);
-
+    //Handling of search bar
+    public void initializeSearchBarPanel(){
         JPanel searchPanel = new JPanel(new GridLayout(2,5));
         customerInterfacePanel.add(searchPanel);
 
@@ -447,6 +485,7 @@ public class BookStore {
         searchGenre.setToolTipText("Genre: ");
         searchPanel.add(searchGenre);
 
+        //Invokes searchBooks() based on user inputs
         searchButton.addActionListener((ActionListener) new ActionListener(){  
             @Override
             public void actionPerformed(ActionEvent e) {      
@@ -466,13 +505,10 @@ public class BookStore {
                 booksList.setListData(searchBooks(title, author, ISBN, genre));
             }  
         });  
-
-        JPanel cartPanel = new JPanel(new GridLayout(1, 2));
-        customerInterfacePanel.add(cartPanel);
-
-        JPanel cartButtonsPanel = new JPanel(new GridLayout(6, 1));
-        cartPanel.add(cartButtonsPanel);        
-
+    }
+ 
+    //Handling user login interface
+    public void initializeUserLoginPanel(){     
         JPanel userPanel = new JPanel(new GridLayout(1,3));
         cartButtonsPanel.add(userPanel);
 
@@ -494,23 +530,29 @@ public class BookStore {
         });  
         userPanel.add(registerUserButton);
 
-        usernameValue = new JLabel("Not Logged In");
-        userPanel.add(usernameValue);
-
+        usernameInfo = new JLabel("Not Logged In");
+        userPanel.add(usernameInfo);
+    }
+    
+    //Handling of cart interface
+    public void initializeCartPanel(){   
         JButton addToCartButton = new JButton("Add to Cart");
         cartButtonsPanel.add(addToCartButton);
 
+        //Handles adding an item from the viewable storefront to the user's cart
         addToCartButton.addActionListener((ActionListener) new ActionListener(){  
             @Override
             public void actionPerformed(ActionEvent e) {      
                 if(booksList.getSelectedValue() != null){
                     boolean alreadyAdded = false;
+                    //Check that the item isn't already added
                     for(int i = 0; i < cart.size(); i++){
                         if(cart.get(i).getISBN().equals(booksList.getSelectedValue().getISBN())){
                             alreadyAdded = true;
                             break;
                         }
                     }
+                    //If it isn't we add it to the cart and increment the amount in the cart
                     if(!alreadyAdded){
                         cart.add(booksList.getSelectedValue());
                         booksList.getSelectedValue().addToCart();
@@ -520,6 +562,8 @@ public class BookStore {
             }  
         });  
 
+        //Handles increasing cart quantity of selected book
+        //Note that the book in the CART needs to be selected in order to increase its quantity - don't select the book in the storefront collection
         JButton increaseQuantityCartButton = new JButton("Increase quantity in Cart");
         increaseQuantityCartButton.addActionListener((ActionListener) new ActionListener(){  
             @Override
@@ -534,6 +578,8 @@ public class BookStore {
         });  
         cartButtonsPanel.add(increaseQuantityCartButton);  
 
+        //Handles decreasing cart quantity of selected book
+        //Note that the book in the CART needs to be selected in order to decrease its quantity - don't select the book in the storefront collection
         JButton decreaseQuantityCartButton = new JButton("Decrease quantity in Cart");
         decreaseQuantityCartButton.addActionListener((ActionListener) new ActionListener(){  
             @Override
@@ -560,11 +606,14 @@ public class BookStore {
         orderButton.addActionListener((ActionListener) new ActionListener(){  
             @Override
             public void actionPerformed(ActionEvent e) { 
-                confirmOrder();
+                showOrderConfirmationPopUp();
             }  
         });  
-        cartButtonsPanel.add(orderButton);               
+        cartButtonsPanel.add(orderButton);   
+    }
 
+    //Handling tracking interface
+    public void initializeTrackingPanel(){   
         JPanel trackingPanel = new JPanel(new GridLayout(1,3));
         cartButtonsPanel.add(trackingPanel);        
 
@@ -585,7 +634,5 @@ public class BookStore {
                 }
             }  
         });  
-
-        frame.setVisible(true);
     }
 }

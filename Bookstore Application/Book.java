@@ -1,14 +1,12 @@
 public class Book {
     private String title;
     private String ISBN;
-    private double price;
     private int stock;
     private int inCart;
 
     public Book(String title, String ISBN, double price, int stock){
         this.title = title;
         this.ISBN = ISBN;
-        this.price = price;
         this.stock = stock;
         this.inCart = 0;
     }
