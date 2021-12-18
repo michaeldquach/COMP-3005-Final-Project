@@ -23,6 +23,10 @@ public class Book {
         }
     }
 
+    public void empty(){
+        this.inCart = 0;
+    }
+
     public String toString(){
         //return String.format("%s, %s, %.2f, %d", title, ISBN, price, stock);
         return title + ", In cart: " + inCart;

@@ -52,7 +52,7 @@ CREATE TABLE orders (
 	order_id				SERIAL,
 	user_id					VARCHAR(50) NOT NULL,
 	tracking_number			SERIAL UNIQUE NOT NULL,
-	total					DECIMAL(10,2) NOT NULL,
+	total					DECIMAL(10,2) NOT NULL CHECK (total >= 0),
 	billing_address			VARCHAR(100) NOT NULL,
 	shipping_address		VARCHAR(100) NOT NULL,
 	order_status			VARCHAR(50) NOT NULL,
@@ -69,9 +69,9 @@ CREATE TABLE books (
 	publisher_id			SERIAL NOT NULL,
 	num_pages				INT NOT NULL,
 	available				BOOLEAN NOT NULL,
-	stock					INT NOT NULL,
-	price					DECIMAL(10,2) NOT NULL,
-	publisher_percentage	DECIMAL(10,2) NOT NULL,
+	stock					INT NOT NULL CHECK (stock >= 0),
+	price					DECIMAL(10,2) NOT NULL CHECK (price >= 0),
+	publisher_percentage	DECIMAL(10,2) NOT NULL CHECK (publisher_percentage >= 0),
 	PRIMARY KEY (ISBN),
 	FOREIGN KEY (genre_id) REFERENCES genres
 		ON UPDATE CASCADE,
@@ -95,7 +95,7 @@ CREATE TABLE suborders (
 	suborder_id				SERIAL,
 	order_id 				SERIAL NOT NULL,
 	ISBN					VARCHAR(30) NOT NULL,
-	quantity				INT NOT NULL,
+	quantity				INT NOT NULL CHECK (quantity >= 0),
 	PRIMARY KEY (suborder_id, order_id),
 	FOREIGN KEY (order_id) REFERENCES orders
 		ON DELETE CASCADE
@@ -103,6 +103,217 @@ CREATE TABLE suborders (
 	FOREIGN KEY (ISBN) REFERENCES books
 		ON UPDATE CASCADE
 );
+
+
+ALTER SEQUENCE orders_tracking_number_seq RESTART WITH 10000;
+
+
+CREATE or REPLACE VIEW sales_per_day as
+SELECT date, sum(quantity * price) as total_sales, sum(quantity * price * publisher_percentage) as total_expenditures FROM 
+orders NATURAL JOIN suborders NATURAL JOIN books
+GROUP BY date;
+
+CREATE or REPLACE VIEW sales_per_genre_by_day as
+SELECT date, genre_name, sum(quantity) as total_purchased, sum(quantity * price) as total_sales, sum(quantity * price * publisher_percentage) as total_expenditures FROM 
+orders NATURAL JOIN suborders NATURAL JOIN books NATURAL JOIN genres
+GROUP BY date, genre_name;
+
+CREATE or REPLACE VIEW sales_per_author_by_day as
+SELECT date, author_id, author_name, sum(quantity) as total_purchased, sum(quantity * price) as total_sales, sum(quantity * price * publisher_percentage) as total_expenditures FROM 
+orders NATURAL JOIN suborders NATURAL JOIN books NATURAL JOIN book_author NATURAL JOIN authors
+GROUP BY date, author_id, author_name;
+
+CREATE or REPLACE VIEW sales_per_book_by_day as
+SELECT date, ISBN, title, sum(quantity) as total_purchased FROM
+orders NATURAL JOIN suborders NATURAL JOIN books
+GROUP BY date, ISBN, title;
+
+
+-- Returns books that match each parameter. Ignores null search parameters.
+CREATE or REPLACE function search_book (search_title VARCHAR(50), search_author_name VARCHAR(50), search_ISBN VARCHAR(30), search_genre VARCHAR(50))
+	returns table (
+		book_title VARCHAR(50),
+		book_ISBN VARCHAR(30),
+		book_price DECIMAL(10,2),
+		book_stock INTEGER
+	)
+	language plpgsql
+as $$
+BEGIN
+	return query 
+		SELECT DISTINCT
+			title,
+			ISBN,
+			price,
+			stock
+		FROM 
+			books NATURAL JOIN book_author NATURAL JOIN authors NATURAL JOIN genres
+		WHERE 
+			(title = search_title or search_title is NULL) and
+			(author_name = search_author_name or search_author_name is NULL) and
+			(ISBN = search_ISBN or search_ISBN is NULL) and
+			(genre_name = search_genre or search_genre is NULL) and available = true;
+END;$$;
+
+-- Updates storefront availablity of book by ISBN. Used by bookstore owner to "remove" book from collection
+CREATE or REPLACE FUNCTION update_availability (ISBN_input VARCHAR(30), availability BOOLEAN)
+	returns void 	
+	LANGUAGE plpgsql
+as $$
+BEGIN
+	UPDATE 
+		books
+	SET 
+		available = availability
+	WHERE 
+		books.ISBN = ISBN_input;
+END;$$;
+
+-- Aggregates all sales within input period
+CREATE or REPLACE function sales_per_period (start_date date, end_date date)
+	returns table (
+		total_sales DECIMAL(10,2),
+		total_expenditures DECIMAL(10,2)
+	)
+	language plpgsql
+as $$
+BEGIN
+	return query 
+		SELECT 
+			sum(sales_per_day.total_sales),
+			sum(sales_per_day.total_expenditures)
+		FROM 
+			sales_per_day
+		WHERE 
+			date >= start_date and date <= end_date;
+END;$$;
+
+-- Aggregates sales grouped by genre within input period
+CREATE or REPLACE FUNCTION sales_per_genre (start_date DATE, end_date DATE)
+	returns table (
+		genre_name VARCHAR(50),
+		total_sales DECIMAL(10,2),
+		total_expenditures DECIMAL(10,2)
+	)
+	language plpgsql
+as $$
+BEGIN
+	return query 
+		SELECT 
+			sales_per_genre_by_day.genre_name, 
+			sum(sales_per_genre_by_day.total_sales), 
+			sum(sales_per_genre_by_day.total_expenditures) 
+		FROM 
+			sales_per_genre_by_day
+		WHERE 
+			date >= start_date and date <= end_date
+		GROUP BY 
+			sales_per_genre_by_day.genre_name;
+END;$$;
+
+-- Aggregates sales grouped by author within input period
+CREATE or REPLACE FUNCTION sales_per_author (start_date DATE, end_date DATE)
+	returns table (
+		author_name VARCHAR(50),
+		total_sales DECIMAL(10,2),
+		total_expenditures DECIMAL(10,2)
+	)
+	language plpgsql
+as $$
+BEGIN
+	return query 
+		SELECT 
+			sales_per_author_by_day.author_name, 
+			sum(sales_per_author_by_day.total_sales), 
+			sum(sales_per_author_by_day.total_expenditures) 
+		FROM 
+			sales_per_author_by_day
+		WHERE 
+			date >= start_date and date <= end_date
+		GROUP BY 
+			sales_per_author_by_day.author_id,
+			sales_per_author_by_day.author_name;
+END;$$;
+
+-- Aggregates sales of specific book within input period
+CREATE or REPLACE FUNCTION sales_per_book (book_ISBN VARCHAR(30), start_date DATE, end_date DATE)
+	returns table (
+		ISBN VARCHAR(30),
+		title VARCHAR(50),
+		total_purchased DECIMAL(10,2)
+	)
+	language plpgsql
+as $$
+BEGIN
+	return query 
+		SELECT 
+			sales_per_book_by_day.ISBN, 
+			sales_per_book_by_day.title,
+			sum(sales_per_book_by_day.total_purchased) 
+		FROM 
+			sales_per_book_by_day
+		WHERE 
+			sales_per_book_by_day.ISBN = book_ISBN and date >= start_date and date <= end_date
+		GROUP BY 
+			sales_per_book_by_day.ISBN,
+			sales_per_book_by_day.title;
+END;$$;
+
+-- Defines trigger to restock books when stock has dropped below threshold
+CREATE or REPLACE FUNCTION restock()
+RETURNS TRIGGER
+AS
+$$
+BEGIN
+	IF NEW.stock < 10 THEN
+		-- Reorders books equal to number of books sold in the last month
+		IF NEW.stock + (SELECT total_purchased FROM sales_per_book(NEW.ISBN, current_date - 30, current_date)) >= 10
+		THEN
+			UPDATE books
+			SET stock = stock + (SELECT total_purchased FROM sales_per_book(ISBN, current_date - 30, current_date))
+			WHERE ISBN = NEW.ISBN;
+		-- If the number of books sold in the last month is 0 or would sum to less than 10, simply restock books to threshold
+		ELSE
+			UPDATE books
+			SET stock = 10
+			WHERE ISBN = NEW.ISBN;
+		END IF;
+	END IF;
+RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Attaches trigger to books relation
+CREATE TRIGGER book_restock
+AFTER UPDATE of stock on books
+FOR EACH ROW
+WHEN (OLD.stock IS DISTINCT FROM NEW.stock)
+EXECUTE PROCEDURE restock();
+
+-- Defines trigger to update stock of book when suborder is made
+CREATE or REPLACE FUNCTION update_stock_total()
+RETURNS TRIGGER
+AS
+$$
+BEGIN	
+	-- Updates books to reflect quantity after suborder
+	UPDATE books
+	SET stock = stock - NEW.quantity
+	WHERE ISBN = NEW.ISBN;
+	-- Updates orders to reflect new total after suborder
+	UPDATE orders
+	SET total = total + NEW.quantity * (SELECT price FROM books WHERE NEW.ISBN = books.ISBN)
+	WHERE order_id = NEW.order_id;
+RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Attaches trigger to suborders relation
+CREATE TRIGGER suborder_update_stock
+AFTER INSERT OR UPDATE on suborders
+FOR EACH ROW
+EXECUTE PROCEDURE update_stock_total();
+
 
 INSERT INTO users (user_id, user_first_name, user_last_name, user_email, user_billing_address, user_shipping_address)
 	VALUES('User1', 'U1F', 'U1L', 'U1@gmail.com', 'U1 Billing Lane', 'U1 Shipping Lane');
@@ -325,10 +536,13 @@ INSERT INTO book_author (ISBN, author_id)
 
 
 INSERT INTO orders (user_id, total, billing_address, shipping_address, order_status, date)
-	VALUES('User1', 16.99, 'Order1 Billing', 'Order1 Shipping', 'Completed', '2021-12-16');
+	VALUES('User1', 0, 'Order1 Billing', 'Order1 Shipping', 'Completed', '2021-12-16');
 
 INSERT INTO orders (user_id, total, billing_address, shipping_address, order_status, date)
-	VALUES('User2', 28.69, 'Order2 Billing', 'Order2 Shipping', 'Completed', '2021-12-17');
+	VALUES('User2', 0, 'Order2 Billing', 'Order2 Shipping', 'Completed', '2021-12-17');
+
+INSERT INTO orders (user_id, total, billing_address, shipping_address, order_status, date)
+	VALUES('User3', 0, 'Order3 Billing', 'Order3 Shipping', 'Completed', '2021-10-17');
 
 
 INSERT INTO suborders (suborder_id, order_id, ISBN, quantity)
@@ -340,198 +554,8 @@ INSERT INTO suborders (suborder_id, order_id, ISBN, quantity)
 INSERT INTO suborders (suborder_id, order_id, ISBN, quantity)
 	VALUES(2, 2, '111-1-11111-111-1', 1);
 
-
-
-
-
-
-CREATE or REPLACE VIEW sales_per_day as
-SELECT date, sum(quantity * price) as total_sales, sum(quantity * price * publisher_percentage) as total_expenditures FROM 
-orders NATURAL JOIN suborders NATURAL JOIN books
-GROUP BY date;
-
-CREATE or REPLACE VIEW sales_per_genre_by_day as
-SELECT date, genre_name, sum(quantity) as total_purchased, sum(quantity * price) as total_sales, sum(quantity * price * publisher_percentage) as total_expenditures FROM 
-orders NATURAL JOIN suborders NATURAL JOIN books NATURAL JOIN genres
-GROUP BY date, genre_name;
-
-CREATE or REPLACE VIEW sales_per_author_by_day as
-SELECT date, author_id, author_name, sum(quantity) as total_purchased, sum(quantity * price) as total_sales, sum(quantity * price * publisher_percentage) as total_expenditures FROM 
-orders NATURAL JOIN suborders NATURAL JOIN books NATURAL JOIN book_author NATURAL JOIN authors
-GROUP BY date, author_id, author_name;
-
-CREATE or REPLACE VIEW sales_per_book_by_day as
-SELECT date, ISBN, title, sum(quantity) as total_purchased FROM
-orders NATURAL JOIN suborders NATURAL JOIN books
-GROUP BY date, ISBN, title;
-
-
-
--- Returns books that match each parameter. Ignores null search parameters.
-CREATE or REPLACE function search_book (search_title VARCHAR(50), search_author_name VARCHAR(50), search_ISBN VARCHAR(30), search_genre VARCHAR(50))
-	returns table (
-		book_title VARCHAR(50),
-		book_ISBN VARCHAR(30),
-		book_price DECIMAL(10,2),
-		book_stock INTEGER
-	)
-	language plpgsql
-as $$
-BEGIN
-	return query 
-		SELECT DISTINCT
-			title,
-			ISBN,
-			price,
-			stock
-		FROM 
-			books NATURAL JOIN book_author NATURAL JOIN authors NATURAL JOIN genres
-		WHERE 
-			(title = search_title or search_title is NULL) and
-			(author_name = search_author_name or search_author_name is NULL) and
-			(ISBN = search_ISBN or search_ISBN is NULL) and
-			(genre_name = search_genre or search_genre is NULL) and available = true;
-END;$$;
-
--- Updates storefront availablity of book by ISBN. Used by bookstore owner to "remove" book from collection
-CREATE or REPLACE FUNCTION update_availability (ISBN_input VARCHAR(30), availability BOOLEAN)
-	returns void 	
-	LANGUAGE plpgsql
-as $$
-BEGIN
-	UPDATE 
-		books
-	SET 
-		available = availability
-	WHERE 
-		books.ISBN = ISBN_input;
-END;$$;
-
--- Aggregates all sales within input period
-CREATE or REPLACE function sales_per_period (start_date date, end_date date)
-	returns table (
-		total_sales DECIMAL(10,2),
-		total_expenditures DECIMAL(10,2)
-	)
-	language plpgsql
-as $$
-BEGIN
-	return query 
-		SELECT 
-			sum(sales_per_day.total_sales),
-			sum(sales_per_day.total_expenditures)
-		FROM 
-			sales_per_day
-		WHERE 
-			date >= start_date and date <= end_date;
-END;$$;
-
--- Aggregates sales grouped by genre within input period
-CREATE or REPLACE FUNCTION sales_per_genre (start_date DATE, end_date DATE)
-	returns table (
-		genre_name VARCHAR(50),
-		total_sales DECIMAL(10,2),
-		total_expenditures DECIMAL(10,2)
-	)
-	language plpgsql
-as $$
-BEGIN
-	return query 
-		SELECT 
-			sales_per_genre_by_day.genre_name, 
-			sum(sales_per_genre_by_day.total_sales), 
-			sum(sales_per_genre_by_day.total_expenditures) 
-		FROM 
-			sales_per_genre_by_day
-		WHERE 
-			date >= start_date and date <= end_date
-		GROUP BY 
-			sales_per_genre_by_day.genre_name;
-END;$$;
-
--- Aggregates sales grouped by author within input period
-CREATE or REPLACE FUNCTION sales_per_author (start_date DATE, end_date DATE)
-	returns table (
-		author_name VARCHAR(50),
-		total_sales DECIMAL(10,2),
-		total_expenditures DECIMAL(10,2)
-	)
-	language plpgsql
-as $$
-BEGIN
-	return query 
-		SELECT 
-			sales_per_author_by_day.author_name, 
-			sum(sales_per_author_by_day.total_sales), 
-			sum(sales_per_author_by_day.total_expenditures) 
-		FROM 
-			sales_per_author_by_day
-		WHERE 
-			date >= start_date and date <= end_date
-		GROUP BY 
-			sales_per_author_by_day.author_id,
-			sales_per_author_by_day.author_name;
-END;$$;
-
--- Aggregates sales of specific book within input period
-CREATE or REPLACE FUNCTION sales_per_book (book_ISBN VARCHAR(30), start_date DATE, end_date DATE)
-	returns table (
-		ISBN VARCHAR(30),
-		title VARCHAR(50),
-		total_purchased DECIMAL(10,2)
-	)
-	language plpgsql
-as $$
-BEGIN
-	return query 
-		SELECT 
-			sales_per_book_by_day.ISBN, 
-			sales_per_book_by_day.title,
-			sum(sales_per_book_by_day.total_purchased) 
-		FROM 
-			sales_per_book_by_day
-		WHERE 
-			sales_per_book_by_day.ISBN = book_ISBN and date >= start_date and date <= end_date
-		GROUP BY 
-			sales_per_book_by_day.ISBN,
-			sales_per_book_by_day.title;
-END;$$;
-
--- Defines trigger to restock books when stock has dropped below threshold
-CREATE or REPLACE FUNCTION restock()
-RETURNS TRIGGER
-AS
-$$
-BEGIN
-	IF NEW.stock < 10 THEN
-		-- Reorders books equal to number of books sold in the last month
-		IF NEW.stock + (SELECT total_purchased FROM sales_per_book(NEW.ISBN, current_date - 30, current_date)) >= 10
-		THEN
-			UPDATE books
-			SET stock = stock + (SELECT total_purchased FROM sales_per_book(ISBN, current_date - 30, current_date))
-			WHERE ISBN = NEW.ISBN;
-		-- If the number of books sold in the last month is 0 or would sum to less than 10, simply restock books to threshold
-		ELSE
-			UPDATE books
-			SET stock = 10
-			WHERE ISBN = NEW.ISBN;
-		END IF;
-	END IF;
-RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-
-DROP TRIGGER IF EXISTS book_restock on books;
-
--- Attaches trigger to books relation
-CREATE TRIGGER book_restock
-AFTER UPDATE of stock on books
-FOR EACH ROW
-WHEN (OLD.stock IS DISTINCT FROM NEW.stock)
-EXECUTE PROCEDURE restock();
-
-
+INSERT INTO suborders (suborder_id, order_id, ISBN, quantity)
+	VALUES(1, 3, '111-1-11111-111-1', 1);
 
 
 /*
@@ -592,6 +616,11 @@ SELECT * FROM authors;
 
 -- Get publishers
 SELECT * FROM publishers;
+
+INSERT INTO suborders (suborder_id, order_id, ISBN, quantity)
+	VALUES(3, 2, '111-1-11111-111-1', 45);
+
+SELECT * FROM books;
 
 /*
 INSERT INTO books (ISBN, title, genre_id, publisher_id, num_pages, available, stock, price, publisher_percentage)
