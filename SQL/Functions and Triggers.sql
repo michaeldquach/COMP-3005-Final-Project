@@ -1,3 +1,5 @@
+-- Creates functions and triggers for bookstore database
+
 -- Returns books that match each parameter. Ignores null search parameters.
 CREATE or REPLACE function search_book (search_title VARCHAR(50), search_author_name VARCHAR(50), search_ISBN VARCHAR(30), search_genre VARCHAR(50))
 	returns table (
@@ -62,20 +64,20 @@ BEGIN
 			sales_per_book_by_day.title;
 END;$$;
 
--- Defines trigger to restock books when stock has dropped below threshold
+-- Defines trigger to restock books when stock of specific book has dropped below threshold
 CREATE or REPLACE FUNCTION restock()
 RETURNS TRIGGER
 AS
 $$
 BEGIN
 	IF NEW.stock < 10 THEN
-		-- Reorders books equal to number of books sold in the last month
+		-- Reorders books equal to number of that specific book sold in the last month
 		IF NEW.stock + (SELECT total_purchased FROM sales_per_book(NEW.ISBN, current_date - 30, current_date)) >= 10
 		THEN
 			UPDATE books
 			SET stock = stock + (SELECT total_purchased FROM sales_per_book(ISBN, current_date - 30, current_date))
 			WHERE ISBN = NEW.ISBN;
-		-- If the number of books sold in the last month is 0 or would sum to less than 10, simply restock books to threshold
+		-- If the number of that specific book sold in the last month is 0 or would sum to less than 10, simply restock to threshold
 		ELSE
 			UPDATE books
 			SET stock = 10

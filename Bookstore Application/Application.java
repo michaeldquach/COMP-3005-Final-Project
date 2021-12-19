@@ -12,11 +12,11 @@ public class Application {
             bookstore.close();
         }
         if(owner){
-            bookstore = new ownerBookstore();
+            bookstore = new OwnerBookstore();
             bookstore.initializeView();
         }
         else{
-            bookstore = new customerBookstore();
+            bookstore = new CustomerBookstore();
             bookstore.initializeView();
         }
     }
@@ -48,6 +48,5 @@ public class Application {
         }); 
 
         frame.setVisible(true);
-    }
-    
+    }    
 }

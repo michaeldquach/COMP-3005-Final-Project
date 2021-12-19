@@ -1,3 +1,5 @@
+-- Creates tables and views for bookstore database
+
 DROP TABLE IF EXISTS suborders CASCADE;
 DROP TABLE IF EXISTS book_author CASCADE;
 DROP TABLE IF EXISTS books CASCADE;
@@ -96,24 +98,29 @@ CREATE TABLE suborders (
 );
 
 
+-- Starts tracking id at 10000
 ALTER SEQUENCE orders_tracking_number_seq RESTART WITH 10000;
 
 
+-- Creates view of sales and expenditures of all books per day
 CREATE or REPLACE VIEW sales_per_day as
 SELECT date, sum(quantity * price) as total_sales, sum(quantity * price * publisher_percentage) as total_expenditures FROM 
 orders NATURAL JOIN suborders NATURAL JOIN books
 GROUP BY date;
 
+-- Creates view of sales and expenditures of books grouped by genre per day
 CREATE or REPLACE VIEW sales_per_genre_by_day as
 SELECT date, genre_name, sum(quantity) as total_purchased, sum(quantity * price) as total_sales, sum(quantity * price * publisher_percentage) as total_expenditures FROM 
 orders NATURAL JOIN suborders NATURAL JOIN books NATURAL JOIN genres
 GROUP BY date, genre_name;
 
+-- Creates view of sales and expenditures of books grouped by author per day
 CREATE or REPLACE VIEW sales_per_author_by_day as
 SELECT date, author_id, author_name, sum(quantity) as total_purchased, sum(quantity * price) as total_sales, sum(quantity * price * publisher_percentage) as total_expenditures FROM 
 orders NATURAL JOIN suborders NATURAL JOIN books NATURAL JOIN book_author NATURAL JOIN authors
 GROUP BY date, author_id, author_name;
 
+-- Creates view of sales and expenditures of books grouped by isbn per day
 CREATE or REPLACE VIEW sales_per_book_by_day as
 SELECT date, ISBN, title, sum(quantity) as total_purchased FROM
 orders NATURAL JOIN suborders NATURAL JOIN books

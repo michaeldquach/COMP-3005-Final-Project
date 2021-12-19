@@ -13,16 +13,15 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
-public class ownerBookstore extends Bookstore {
+public class OwnerBookstore extends Bookstore {
     private JList<Book> booksList;
     private Vector<Genre> genreList;
     private Vector<Publisher> publisherList;
     private Vector<Author> authorList;
-    private JFrame frame;
     private JPanel mainPane;
     private JLabel titleInfo, ISBNInfo, priceInfo, stockInfo, authorInfo, genreInfo, publisherInfo, pagesInfo, availableInfo;
 
-    public ownerBookstore(){
+    public OwnerBookstore(){
         this.genreList = new Vector<>();
         this.publisherList = new Vector<>();
         this.authorList = new Vector<>();
@@ -65,7 +64,7 @@ public class ownerBookstore extends Bookstore {
                 if(i <= 0){
                     titleInfo.setText(rset.getString("title"));
                     ISBNInfo.setText(rset.getString("ISBN"));
-                    priceInfo.setText(Double.toString(rset.getDouble("Price")));
+                    priceInfo.setText(String.format("$%.2f", rset.getDouble("Price")));
                     stockInfo.setText(Integer.toString(rset.getInt("Stock")));
                     authorInfo.setText(rset.getString("author_name"));
                     genreInfo.setText(rset.getString("genre_name"));
@@ -255,6 +254,7 @@ public class ownerBookstore extends Bookstore {
         JTextField titleField = new JTextField();
         JComboBox<Genre> genreField = new JComboBox<>(genreList);
         JList<Author> authorField = new JList<>(authorList);
+        authorField.setVisibleRowCount(5);
         JComboBox<Publisher> publisherField = new JComboBox<>(publisherList);
         JTextField pagesField = new JTextField();
         JTextField stockField = new JTextField();
@@ -270,6 +270,7 @@ public class ownerBookstore extends Bookstore {
                 new JLabel("Enter Stock Quantity"), stockField,
                 new JLabel("Enter Price"), priceField,
                 new JLabel("Enter Publisher Percentage"), publisherPercentageField,
+                new JScrollPane(authorField)
         };
         int result = JOptionPane.showConfirmDialog(null, inputs, "Add new book", JOptionPane.PLAIN_MESSAGE);
         if (result == JOptionPane.OK_OPTION) {
@@ -701,9 +702,5 @@ public class ownerBookstore extends Bookstore {
                 }
             }  
         });  
-    }
-
-    public void close(){
-        frame.dispose();
     }
 }

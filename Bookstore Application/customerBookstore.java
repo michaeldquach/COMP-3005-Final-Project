@@ -13,16 +13,15 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
-public class customerBookstore extends Bookstore{
+public class CustomerBookstore extends Bookstore{
     private JList<Book> booksList;
     private JList<Book> cartList;
     private Vector<Book> cart;
-    private JFrame frame;
     private JPanel mainPane, customerInterfacePanel, cartPanel, cartButtonsPanel;
     private JLabel titleInfo, ISBNInfo, priceInfo, stockInfo, authorInfo, genreInfo, publisherInfo, pagesInfo, usernameInfo;
     private String usernameLoggedIn;
 
-    public customerBookstore(){
+    public CustomerBookstore(){
         cart = new Vector<>();
     }
 
@@ -90,7 +89,7 @@ public class customerBookstore extends Bookstore{
                 if(i <= 0){
                     titleInfo.setText(rset.getString("title"));
                     ISBNInfo.setText(rset.getString("ISBN"));
-                    priceInfo.setText(Double.toString(rset.getDouble("Price")));
+                    priceInfo.setText(String.format("$%.2f", rset.getDouble("Price")));
                     stockInfo.setText(Integer.toString(rset.getInt("Stock")));
                     authorInfo.setText(rset.getString("author_name"));
                     genreInfo.setText(rset.getString("genre_name"));
@@ -140,7 +139,7 @@ public class customerBookstore extends Bookstore{
     }
 
     //Queries database to insert new order and corresponding suborders based on user's cart
-    public int[] sendOrder(String userID, String billing, String shipping){
+    public int[] sendOrder(String userID, String shipping, String billing){
         int[] result = {-1, -1};
         try{
             //First we insert the order with the user details
@@ -322,7 +321,7 @@ public class customerBookstore extends Bookstore{
             final JComponent[] inputs = new JComponent[] {
                     new JLabel("Order ID: " + orderNumber),
                     new JLabel("Tracking ID: " + trackingNumber),
-                    new JLabel("Total: $" + total),
+                    new JLabel(String.format("Total: $%.2f", total)),
                     new JLabel("Shipping Address: " + shippingAddress),
                     new JLabel("Order Status: " + orderStatus),
                     new JLabel("Placed On: " + date),
@@ -626,9 +625,5 @@ public class customerBookstore extends Bookstore{
                 }
             }  
         });  
-    }
-
-    public void close(){
-        frame.dispose();
     }
 }
