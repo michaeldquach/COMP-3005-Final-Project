@@ -14,10 +14,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 public class customerBookstore extends Bookstore{
-    private static final String url = "jdbc:postgresql://localhost:5432/bookstore";
-    private static final String userid = "postgres";
-    private static final String password = "Modular1/1!";
-
     private JList<Book> booksList;
     private JList<Book> cartList;
     private Vector<Book> cart;
