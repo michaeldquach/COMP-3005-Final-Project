@@ -13,7 +13,7 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
-public class customerBookstore {
+public class customerBookstore extends Bookstore{
     private static final String url = "jdbc:postgresql://localhost:5432/bookstore";
     private static final String userid = "postgres";
     private static final String password = "Modular1/1!";
@@ -21,17 +21,13 @@ public class customerBookstore {
     private JList<Book> booksList;
     private JList<Book> cartList;
     private Vector<Book> cart;
+    private JFrame frame;
     private JPanel mainPane, customerInterfacePanel, cartPanel, cartButtonsPanel;
     private JLabel titleInfo, ISBNInfo, priceInfo, stockInfo, authorInfo, genreInfo, publisherInfo, pagesInfo, usernameInfo;
     private String usernameLoggedIn;
 
     public customerBookstore(){
         cart = new Vector<>();
-        initializeView();
-    }
-
-    public static void main(String args[]){
-        customerBookstore customerBookstore = new customerBookstore();
     }
 
     //Queries database for book collection available to customer and populates booklist
@@ -354,7 +350,7 @@ public class customerBookstore {
 
     //Initializes view components and handling of user inputs
     public void initializeView(){
-        JFrame frame = new JFrame("Look Inna Book - Customer Interface");
+        frame = new JFrame("Look Inna Book - Customer Interface");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(800, 600);
 
@@ -634,5 +630,9 @@ public class customerBookstore {
                 }
             }  
         });  
+    }
+
+    public void close(){
+        frame.dispose();
     }
 }

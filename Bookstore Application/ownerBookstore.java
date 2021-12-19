@@ -13,7 +13,7 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
-public class ownerBookstore {
+public class ownerBookstore extends Bookstore {
     private static final String url = "jdbc:postgresql://localhost:5432/bookstore";
     private static final String userid = "postgres";
     private static final String password = "Modular1/1!";
@@ -22,6 +22,7 @@ public class ownerBookstore {
     private Vector<Genre> genreList;
     private Vector<Publisher> publisherList;
     private Vector<Author> authorList;
+    private JFrame frame;
     private JPanel mainPane;
     private JLabel titleInfo, ISBNInfo, priceInfo, stockInfo, authorInfo, genreInfo, publisherInfo, pagesInfo, availableInfo;
 
@@ -29,11 +30,6 @@ public class ownerBookstore {
         this.genreList = new Vector<>();
         this.publisherList = new Vector<>();
         this.authorList = new Vector<>();
-        initializeView();
-    }
-
-    public static void main(String args[]){
-        ownerBookstore ownerBookstore = new ownerBookstore();
     }
 
     //Queries database for book collection and populates booklist
@@ -373,7 +369,7 @@ public class ownerBookstore {
             }
             
             //Handling popup
-            JList reportList = new JList<>(report);
+            JList<String> reportList = new JList<>(report);
             reportList.setFont( new Font("monospaced", Font.PLAIN, 12));
             JOptionPane.showConfirmDialog(null, reportList, "Viewing Report: Total Sales vs Expenditures", JOptionPane.PLAIN_MESSAGE);
         }
@@ -401,7 +397,7 @@ public class ownerBookstore {
             }
             
             //Handling popup
-            JList reportList = new JList<>(report);
+            JList<String> reportList = new JList<>(report);
             reportList.setFont( new Font("monospaced", Font.PLAIN, 12));
             JOptionPane.showConfirmDialog(null, reportList, "Viewing Report: Total Sales vs Expenditures By Genre", JOptionPane.PLAIN_MESSAGE);
         }
@@ -429,7 +425,7 @@ public class ownerBookstore {
             }
             
             //Handling popup
-            JList reportList = new JList<>(report);
+            JList<String> reportList = new JList<>(report);
             reportList.setFont( new Font("monospaced", Font.PLAIN, 12));
             JOptionPane.showConfirmDialog(null, reportList, "Viewing Report: Total Sales vs Expenditures By Author", JOptionPane.PLAIN_MESSAGE);
         }
@@ -497,7 +493,7 @@ public class ownerBookstore {
 
     //Initializes view components and handling of user inputs
     public void initializeView(){
-        JFrame frame = new JFrame("Look Inna Book - Owner Interface");
+        frame = new JFrame("Look Inna Book - Owner Interface");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(800, 600);
 
@@ -709,5 +705,9 @@ public class ownerBookstore {
                 }
             }  
         });  
+    }
+
+    public void close(){
+        frame.dispose();
     }
 }
